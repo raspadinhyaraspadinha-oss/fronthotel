@@ -1,0 +1,5 @@
+app/.env
+app/storage/*.sqlite
+*.log
+.DS_Store
+Thumbs.db
