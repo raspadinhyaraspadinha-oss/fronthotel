@@ -1,37 +1,41 @@
-# ── Windsor Plaza — URL Rewriting + Security ──
+# ── Windsor Plaza — Rewriting + Segurança ──
+# Compatível com Apache 2.4 (Hostinger)
 
-# Force HTTPS (uncomment on Hostinger after SSL is active)
+# Descomente após ativar SSL na Hostinger:
 # RewriteCond %{HTTPS} off
 # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 RewriteEngine On
 
-# Serve existing files/directories directly
+# ── Bloqueia acesso direto à pasta app/ ──
+RewriteRule ^app(/.*)?$ - [F,L]
+
+# Serve arquivos/pastas reais diretamente (css, js, imagens)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Everything else → index.php
+# Tudo o resto → index.php
 RewriteRule ^ index.php [L]
 
-# ── Security Headers ──
-<IfModule mod_headers.c>
-    Header set X-Content-Type-Options "nosniff"
-    Header set X-Frame-Options "SAMEORIGIN"
-    Header set X-XSS-Protection "1; mode=block"
-    Header set Referrer-Policy "strict-origin-when-cross-origin"
-</IfModule>
-
-# ── Block sensitive files ──
-<FilesMatch "\.(env|sqlite|sqlite3|log|md|json|lock|php~)$">
+# ── Bloqueia extensões sensíveis (Apache 2.4) ──
+<FilesMatch "\.(env|sqlite|sqlite3|log|lock|php~|bak|sql)$">
     Require all denied
 </FilesMatch>
 
+# ── Bloqueia dotfiles ──
 <FilesMatch "^\.">
     Require all denied
 </FilesMatch>
 
-# ── Cache static assets ──
+# ── Headers de segurança ──
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ── Cache de assets estáticos ──
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresByType text/css "access plus 1 month"
@@ -41,7 +45,7 @@ RewriteRule ^ index.php [L]
     ExpiresByType image/svg+xml "access plus 1 year"
 </IfModule>
 
-# ── Compress ──
+# ── Compressão ──
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>

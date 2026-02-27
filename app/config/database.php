@@ -4,30 +4,61 @@ function getDatabase(): PDO
 {
     static $pdo = null;
 
-    if ($pdo === null) {
-        $dir = APP_PATH . '/storage';
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+    if ($pdo !== null) {
+        return $pdo;
+    }
+
+    $dir = APP_PATH . '/storage';
+
+    // Cria pasta storage/ se não existir
+    if (!is_dir($dir)) {
+        if (!mkdir($dir, 0755, true)) {
+            throw new RuntimeException(
+                "Não foi possível criar a pasta storage/. " .
+                "Crie a pasta app/storage/ manualmente e defina permissão 755."
+            );
         }
+    }
 
-        $dbPath = $dir . '/database.sqlite';
-        $isNew = !file_exists($dbPath);
+    if (!is_writable($dir)) {
+        throw new RuntimeException(
+            "A pasta app/storage/ não tem permissão de escrita. " .
+            "Defina permissão 755 no Gerenciador de Arquivos da Hostinger."
+        );
+    }
 
-        $pdo = new PDO('sqlite:' . $dbPath);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $dbPath = $dir . '/database.sqlite';
+    $isNew  = !file_exists($dbPath);
+
+    $pdo = new PDO('sqlite:' . $dbPath);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    // WAL melhora concorrência, mas é opcional em shared hosting
+    try {
         $pdo->exec("PRAGMA journal_mode=WAL");
-        $pdo->exec("PRAGMA foreign_keys=ON");
+    } catch (PDOException $e) {
+        // Ignora silenciosamente — funciona sem WAL
+    }
 
-        if ($isNew) {
-            initDatabase($pdo);
-        }
+    $pdo->exec("PRAGMA foreign_keys=ON");
+
+    if ($isNew) {
+        initDatabase($pdo);
+    } else {
+        // Garante que tabelas existam mesmo em bancos antigos/incompletos
+        ensureTables($pdo);
     }
 
     return $pdo;
 }
 
 function initDatabase(PDO $pdo): void
+{
+    ensureTables($pdo);
+}
+
+function ensureTables(PDO $pdo): void
 {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS reservations (

@@ -1,20 +1,57 @@
 <?php
 /**
  * Windsor Plaza — Payment Recovery System
- * Front controller (document root)
+ *
+ * Estrutura na Hostinger (public_html):
+ *   public_html/
+ *   ├── index.php       ← este arquivo
+ *   ├── .htaccess
+ *   ├── check.php       ← diagnóstico (apague após usar)
+ *   ├── assets/
+ *   └── app/
+ *       ├── .env
+ *       ├── config/
+ *       ├── src/
+ *       └── storage/
  */
 
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
-// ── Bootstrap ──
-// Hostinger: app/ lives at ../app (one level above public_html)
-// Local dev: app/ lives at ../app (one level above public/)
-define('APP_PATH', realpath(__DIR__ . '/../app') ?: __DIR__ . '/../app');
+define('APP_PATH', __DIR__ . '/app');
 define('PUBLIC_PATH', __DIR__);
 
-require_once APP_PATH . '/config/bootstrap.php';
+// ── Verifica se app/ existe antes de tentar carregar ──
+if (!file_exists(APP_PATH . '/config/bootstrap.php')) {
+    http_response_code(500);
+    die(
+        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Erro de configuração</title>' .
+        '<style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#faf6ef}' .
+        '.box{background:#fff;padding:40px;border-radius:16px;max-width:500px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08)}' .
+        'h1{color:#c9a96e;font-size:20px;margin-bottom:12px}p{color:#666;font-size:14px;line-height:1.7}code{background:#f0f0f0;padding:2px 6px;border-radius:4px}</style>' .
+        '</head><body><div class="box"><h1>Pasta app/ não encontrada</h1>' .
+        '<p>Certifique-se de ter enviado a pasta <code>app/</code> para dentro de <code>public_html/</code>.<br><br>' .
+        'Acesse <a href="/check.php">check.php</a> para diagnóstico completo.</p></div></body></html>'
+    );
+}
+
+// ── Bootstrap com captura de erros ──
+try {
+    require_once APP_PATH . '/config/bootstrap.php';
+} catch (Throwable $e) {
+    http_response_code(500);
+    $debug = file_exists(__DIR__ . '/check.php');
+    $msg = $debug ? htmlspecialchars($e->getMessage() . ' em ' . $e->getFile() . ':' . $e->getLine()) : 'Erro de configuração.';
+    die(
+        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Erro</title>' .
+        '<style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#faf6ef}' .
+        '.box{background:#fff;padding:40px;border-radius:16px;max-width:640px;box-shadow:0 4px 24px rgba(0,0,0,.08)}' .
+        'h1{color:#c9a96e;font-size:18px;margin-bottom:12px}pre{background:#fff0f0;padding:14px;border-radius:8px;font-size:12px;overflow:auto;color:#c0392b}' .
+        'p{color:#666;font-size:14px}</style></head><body><div class="box"><h1>Erro ao inicializar</h1>' .
+        '<pre>' . $msg . '</pre><p>Acesse <a href="/check.php">check.php</a> para diagnóstico.</p></div></body></html>'
+    );
+}
 
 // ── Routing ──
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -39,15 +76,31 @@ $routeKey = "$method $uri";
 
 if (isset($routes[$routeKey])) {
     [$controller, $action] = $routes[$routeKey];
-    require_once APP_PATH . "/src/controllers/$controller.php";
-    $controller::$action();
+    require_once APP_PATH . "/src/controllers/{$controller}.php";
+    try {
+        $controller::$action();
+    } catch (Throwable $e) {
+        http_response_code(500);
+        $debug = file_exists(__DIR__ . '/check.php');
+        die($debug
+            ? '<pre style="padding:20px;font-family:monospace;background:#fff0f0;color:#c0392b">' . htmlspecialchars($e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine()) . '</pre>'
+            : 'Erro interno. Contate o administrador.');
+    }
     exit;
 }
 
 // /r/{CODE}
 if (preg_match('#^/r/([A-Za-z0-9]{6})$#', $uri, $matches)) {
     require_once APP_PATH . '/src/controllers/ReservationController.php';
-    ReservationController::show($matches[1]);
+    try {
+        ReservationController::show($matches[1]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        $debug = file_exists(__DIR__ . '/check.php');
+        die($debug
+            ? '<pre style="padding:20px;font-family:monospace;background:#fff0f0;color:#c0392b">' . htmlspecialchars($e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine()) . '</pre>'
+            : 'Erro interno. Contate o administrador.');
+    }
     exit;
 }
 
